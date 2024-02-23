@@ -24,73 +24,83 @@ type binlogHandler struct {
 func (h *binlogHandler) OnRow(e *canal.RowsEvent) error {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Print(r, " ", string(debug.Stack()))
+			fmt.Printf("Panic: %v\n%s\n", r, debug.Stack())
 		}
 	}()
 
-	// base value for market_canal.DeleteAction or market_canal.InsertAction
-	var n = 0
-	var k = 1
-	if e.Action == canal.UpdateAction {
-		n = 1
-		k = 2
+	// Determine the action type for the event
+	var action string
+	switch e.Action {
+	case canal.UpdateAction:
+		action = "Update"
+	case canal.InsertAction:
+		action = "Insert"
+	case canal.DeleteAction:
+		action = "Delete"
+	default:
+		action = "Unknown action"
 	}
-	rowLen := len(e.Rows)
-	for i := n; i < rowLen; i += k {
-		key := strings.ToLower(e.Table.Schema + "." + e.Table.Name)
-		for _, tableName := range h.TableNameList {
-			keyTable := strings.ToLower(h.SchemaName + "." + tableName)
-			if key == keyTable {
 
-				switch e.Action {
-				case canal.UpdateAction:
-					// old
-					marshalOld, err := json.Marshal(e.Rows[0])
-					if err != nil {
-						fmt.Errorf(fmt.Sprintf("GetBinLogData Old error:%v", err))
-						return err
-					}
-					fmt.Println(fmt.Sprintf("GetBinLogData Old marshal:%v", string(marshalOld)))
-					// new
-					marshalNew, err := json.Marshal(e.Rows[1])
-					if err != nil {
-						fmt.Errorf(fmt.Sprintf("GetBinLogData New error:%v", err))
-						return err
-					}
-					fmt.Println(fmt.Sprintf("GetBinLogData New marshal:%v", string(marshalNew)))
-					// update 会有新旧两条数据
-					fmt.Println(fmt.Sprintf("Action start:%v", "Update"))
-					fmt.Println(fmt.Sprintf("%s is update  %v", tableName, marshalNew))
-				case canal.InsertAction:
-					// old
-					marshal, err := json.Marshal(e.Rows[0])
-					if err != nil {
-						fmt.Errorf(fmt.Sprintf("GetBinLogData Old error:%v", err))
-						return err
-					}
-					fmt.Println(fmt.Sprintf("GetBinLogData Old marshal:%v", string(marshal)))
-					// insert 会有新数据
-					fmt.Println(fmt.Sprintf("Action start:%v", "Insert"))
-					fmt.Println(fmt.Sprintf("%s is created  %v", tableName, string(marshal)))
-				case canal.DeleteAction:
-					// old
-					marshal, err := json.Marshal(e.Rows[0])
-					if err != nil {
-						fmt.Errorf(fmt.Sprintf("GetBinLogData Old error:%v", err))
-						return err
-					}
-					fmt.Println(fmt.Sprintf("GetBinLogData Old marshal:%v", string(marshal)))
-					fmt.Println(fmt.Sprintf("Action start:%v", "Delete"))
-					fmt.Println(fmt.Sprintf("%s is deleted %v", tableName, string(marshal)))
-				default:
-					fmt.Println(fmt.Sprintf("Action start:%v", "Unknown action"))
+	// Find the corresponding table in the handler's TableNameList
+	key := strings.ToLower(e.Table.Schema + "." + e.Table.Name)
+	for _, tableName := range h.TableNameList {
+		keyTable := strings.ToLower(h.SchemaName + "." + tableName)
+		if key == keyTable {
+			switch e.Action {
+			case canal.UpdateAction:
+				// Extract old and new rows for update action
+				oldRow := e.Rows[0]
+				newRow := e.Rows[1]
+
+				// Marshal old row
+				marshalOld, err := json.Marshal(oldRow)
+				if err != nil {
+					return fmt.Errorf("failed to marshal old row: %w", err)
 				}
-				break
+				fmt.Printf("Old Row: %s\n", marshalOld)
+
+				// Marshal new row
+				marshalNew, err := json.Marshal(newRow)
+				if err != nil {
+					return fmt.Errorf("failed to marshal new row: %w", err)
+				}
+				fmt.Printf("New Row: %s\n", marshalNew)
+
+				fmt.Printf("Action: %s\n", action)
+				fmt.Printf("%s is updated: %s\n", tableName, marshalNew)
+
+			case canal.InsertAction:
+				// Extract inserted row for insert action
+				insertedRow := e.Rows[0]
+
+				// Marshal inserted row
+				marshal, err := json.Marshal(insertedRow)
+				if err != nil {
+					return fmt.Errorf("failed to marshal inserted row: %w", err)
+				}
+				fmt.Printf("Inserted Row: %s\n", marshal)
+
+				fmt.Printf("Action: %s\n", action)
+				fmt.Printf("%s is created: %s\n", tableName, marshal)
+
+			case canal.DeleteAction:
+				// Extract deleted row for delete action
+				deletedRow := e.Rows[0]
+
+				// Marshal deleted row
+				marshal, err := json.Marshal(deletedRow)
+				if err != nil {
+					return fmt.Errorf("failed to marshal deleted row: %w", err)
+				}
+				fmt.Printf("Deleted Row: %s\n", marshal)
+
+				fmt.Printf("Action: %s\n", action)
+				fmt.Printf("%s is deleted: %s\n", tableName, marshal)
 			}
-
+			break
 		}
-
 	}
+
 	return nil
 }
 

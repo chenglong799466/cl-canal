@@ -14,19 +14,17 @@ func BinLogListener() error {
 	cfg.Password = config.DbConfig.PWD
 	cfg.Flavor = "mysql"
 	cfg.Dump.ExecutionPath = ""
-	// NewCanal
+
 	newCanal, err := canal.NewCanal(cfg)
 	if err != nil {
-		fmt.Errorf(fmt.Sprintf("getDefaultCanal ERROR: %v", err))
-		return err
+		return fmt.Errorf("failed to create Canal instance: %w", err)
 	}
-	// SHOW MASTER STATUS 查询当前listener的binlog起始位置
+
 	coords, err := newCanal.GetMasterPos()
 	if err != nil {
-		fmt.Errorf(fmt.Sprintf("GetMasterPos ERROR: %v", err))
-		return err
+		return fmt.Errorf("failed to get master position: %w", err)
 	}
-	// handler
+
 	handler := &binlogHandler{
 		SchemaName:    config.DbConfig.DataBase,
 		TableNameList: TableArray,
@@ -35,8 +33,8 @@ func BinLogListener() error {
 	newCanal.SetEventHandler(handler)
 	err = newCanal.RunFrom(coords)
 	if err != nil {
-		fmt.Errorf(fmt.Sprintf("RunFrom ERROR: %v", err))
-		return err
+		return fmt.Errorf("failed to run Canal: %w", err)
 	}
+
 	return nil
 }
